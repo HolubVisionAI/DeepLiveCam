@@ -16,6 +16,13 @@ from modules.utilities import (
 )
 from modules.cluster_analysis import find_closest_centroid
 import os
+import onnxruntime as ort
+
+# Set CUDA as default if available
+if "CUDAExecutionProvider" in ort.get_available_providers():
+    modules.globals.execution_providers = ["CUDAExecutionProvider"]
+else:
+    modules.globals.execution_providers = ["CPUExecutionProvider"]
 
 FACE_SWAPPER = None
 THREAD_LOCK = threading.Lock()
@@ -23,6 +30,7 @@ NAME = "DLC.FACE-SWAPPER"
 
 abs_dir = os.path.dirname(os.path.abspath(__file__))
 models_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(abs_dir))), 'models')
+
 
 def pre_check() -> bool:
     download_directory_path = abs_dir
@@ -40,12 +48,12 @@ def pre_start() -> bool:
         update_status("Select an image for source path.", NAME)
         return False
     elif not modules.globals.map_faces and not get_one_face(
-        cv2.imread(modules.globals.source_path)
+            cv2.imread(modules.globals.source_path)
     ):
         update_status("No face in source path detected.", NAME)
         return False
     if not is_image(modules.globals.target_path) and not is_video(
-        modules.globals.target_path
+            modules.globals.target_path
     ):
         update_status("Select an image or video for target path.", NAME)
         return False
@@ -78,7 +86,6 @@ def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
     # Calculate processing time
     processing_time = end_time - start_time
     print(f"Processing time for swapped_frame: {processing_time:.4f} seconds")
-
 
     if modules.globals.mouth_mask:
         # Create a mask for the target face
@@ -116,13 +123,6 @@ def process_frame(source_face: Face, temp_frame: Frame) -> Frame:
         target_face = get_one_face(temp_frame)
         if target_face:
             temp_frame = swap_face(source_face, target_face, temp_frame)
-    temp_frame = cv2.resize(
-        temp_frame,
-        (
-            1600,
-            900,
-        ),
-    )
     return temp_frame
 
 
@@ -180,7 +180,7 @@ def process_frame_v2(temp_frame: Frame, temp_frame_path: str = "") -> Frame:
         elif not modules.globals.many_faces:
             if detected_faces:
                 if len(detected_faces) <= len(
-                    modules.globals.simple_map["target_embeddings"]
+                        modules.globals.simple_map["target_embeddings"]
                 ):
                     for detected_face in detected_faces:
                         closest_centroid_index, _ = find_closest_centroid(
@@ -217,7 +217,7 @@ def process_frame_v2(temp_frame: Frame, temp_frame_path: str = "") -> Frame:
 
 
 def process_frames(
-    source_path: str, temp_frame_paths: List[str], progress: Any = None
+        source_path: str, temp_frame_paths: List[str], progress: Any = None
 ) -> None:
     if not modules.globals.map_faces:
         source_face = get_one_face(cv2.imread(source_path))
@@ -272,7 +272,7 @@ def process_video(source_path: str, temp_frame_paths: List[str]) -> None:
 
 
 def create_lower_mouth_mask(
-    face: Face, frame: Frame
+        face: Face, frame: Frame
 ) -> (np.ndarray, np.ndarray, tuple, np.ndarray):
     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
     mouth_cutout = None
@@ -311,7 +311,7 @@ def create_lower_mouth_mask(
 
         # Expand the landmarks outward
         expansion_factor = (
-            1 + modules.globals.mask_down_size
+                1 + modules.globals.mask_down_size
         )  # Adjust this for more or less expansion
         expanded_landmarks = (lower_lip_landmarks - center) * expansion_factor + center
 
@@ -326,7 +326,7 @@ def create_lower_mouth_mask(
             5,
         ]  # Indices for landmarks 2, 65, 66, 62, 70, 69, 18
         toplip_extension = (
-            modules.globals.mask_size * 0.5
+                modules.globals.mask_size * 0.5
         )  # Adjust this factor to control the extension
         for idx in toplip_indices:
             direction = expanded_landmarks[idx] - center
@@ -345,8 +345,8 @@ def create_lower_mouth_mask(
         chin_extension = 2 * 0.2  # Adjust this factor to control the extension
         for idx in chin_indices:
             expanded_landmarks[idx][1] += (
-                expanded_landmarks[idx][1] - center[1]
-            ) * chin_extension
+                                                  expanded_landmarks[idx][1] - center[1]
+                                          ) * chin_extension
 
         # Convert back to integer coordinates
         expanded_landmarks = expanded_landmarks.astype(np.int32)
@@ -389,7 +389,7 @@ def create_lower_mouth_mask(
 
 
 def draw_mouth_mask_visualization(
-    frame: Frame, face: Face, mouth_mask_data: tuple
+        frame: Frame, face: Face, mouth_mask_data: tuple
 ) -> Frame:
     landmarks = face.landmark_2d_106
     if landmarks is not None and mouth_mask_data is not None:
@@ -405,7 +405,7 @@ def draw_mouth_mask_visualization(
         max_x, max_y = min(width, max_x), min(height, max_y)
 
         # Adjust mask to match the region size
-        mask_region = mask[0 : max_y - min_y, 0 : max_x - min_x]
+        mask_region = mask[0: max_y - min_y, 0: max_x - min_x]
 
         # Remove the color mask overlay
         # color_mask = cv2.applyColorMap((mask_region * 255).astype(np.uint8), cv2.COLORMAP_JET)
@@ -471,22 +471,22 @@ def draw_mouth_mask_visualization(
 
 
 def apply_mouth_area(
-    frame: np.ndarray,
-    mouth_cutout: np.ndarray,
-    mouth_box: tuple,
-    face_mask: np.ndarray,
-    mouth_polygon: np.ndarray,
+        frame: np.ndarray,
+        mouth_cutout: np.ndarray,
+        mouth_box: tuple,
+        face_mask: np.ndarray,
+        mouth_polygon: np.ndarray,
 ) -> np.ndarray:
     min_x, min_y, max_x, max_y = mouth_box
     box_width = max_x - min_x
     box_height = max_y - min_y
 
     if (
-        mouth_cutout is None
-        or box_width is None
-        or box_height is None
-        or face_mask is None
-        or mouth_polygon is None
+            mouth_cutout is None
+            or box_width is None
+            or box_height is None
+            or face_mask is None
+            or mouth_polygon is None
     ):
         return frame
 
@@ -522,12 +522,12 @@ def apply_mouth_area(
 
         combined_mask = combined_mask[:, :, np.newaxis]
         blended = (
-            color_corrected_mouth * combined_mask + roi * (1 - combined_mask)
+                color_corrected_mouth * combined_mask + roi * (1 - combined_mask)
         ).astype(np.uint8)
 
         # Apply face mask to blended result
         face_mask_3channel = (
-            np.repeat(face_mask_roi[:, :, np.newaxis], 3, axis=2) / 255.0
+                np.repeat(face_mask_roi[:, :, np.newaxis], 3, axis=2) / 255.0
         )
         final_blend = blended * face_mask_3channel + roi * (1 - face_mask_3channel)
 
@@ -574,7 +574,7 @@ def create_face_mask(face: Face, frame: Frame) -> np.ndarray:
                 [forehead_left],
                 right_side_face,
                 left_side_face[
-                    ::-1
+                ::-1
                 ],  # Reverse left side to create a continuous outline
                 [forehead_right],
             ]
