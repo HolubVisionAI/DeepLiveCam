@@ -10,14 +10,36 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 import io
+import os
+import json
+
+# Load configuration from "config_client.json" (located in the same directory as client.py)
+config_path = os.path.join(os.path.dirname(__file__), "config_client.json")
+if os.path.exists(config_path):
+    with open(config_path, "r") as cfg_file:
+        config = json.load(cfg_file)
+else:
+    # Use default config values if config file doesn't exist
+    config = {
+        "host": "192.168.1.14",
+        "port": "8000",
+        "window_width": 800,
+        "window_height": 600,
+        "ws_endpoint": "/ws/client-stream",
+        "upload_endpoint": "/upload-face"
+    }
 
 # Global flag and queue for UI updates
 streaming_flag = False
 frame_queue = queue.Queue()
 
+# Update URLs using config values
+WS_URL = f"ws://{config['host']}:{config['port']}{config['ws_endpoint']}"
+UPLOAD_URL = f"http://{config['host']}:{config['port']}{config['upload_endpoint']}"
+
 
 async def stream_webcam():
-    uri = "ws://192.168.1.14:8000/ws/client-stream"  # update server IP if needed
+    uri = WS_URL  # update server IP if needed
     cap = cv2.VideoCapture(0)
     try:
         async with websockets.connect(uri) as websocket:
@@ -56,16 +78,12 @@ def stop_stream():
 def upload_face_image():
     face_image_path = filedialog.askopenfilename(
         title="Select Face Image",
-        filetypes=[
-            ("Image Files", ("*.png", "*.jpg", "*.jpeg")),  # updated filetypes tuple
-            ("All Files", "*.*")
-        ]
+        filetypes=[("Image Files", ("*.png", "*.jpg", "*.jpeg")), ("All Files", "*.*")]
     )
     if face_image_path:
-        url = "http://192.168.1.14:8000/upload-face"  # update if needed
         with open(face_image_path, "rb") as file:
             files = {"file": file}
-            response = requests.post(url, files=files)
+            response = requests.post(UPLOAD_URL, files=files)
             result = response.json()
             messagebox.showinfo("Upload Response", result.get("status") or result.get("error"))
 
@@ -73,7 +91,7 @@ def upload_face_image():
 # Build a simple UI with Tkinter
 root = tk.Tk()
 root.title("Deep Live Cam Client")
-root.geometry("800x600")  # Set default window size
+root.geometry(f"{config['window_width']}x{config['window_height']}")  # Set default window size from config
 
 # Create a frame for buttons and pack them in one line
 button_frame = tk.Frame(root)
